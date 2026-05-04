@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>购车分期计算器</title>
+<style>
+:root {
+  --bg: #f2f0eb;
+  --surface: #ffffff;
+  --border: #dedad2;
+  --text: #1c1b18;
+  --muted: #6e6d67;
+  --accent: #b8721a;
+  --accent-bg: #fdf5e8;
+  --accent-border: #e2c080;
+  --mono: 'Consolas', 'Courier New', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 2rem 1.25rem 4rem;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.container { max-width: 1380px; margin: 0 auto; }
+.main-layout { display: flex; gap: 1.5rem; align-items: flex-start; }
+.plans-col   { flex: 1; min-width: 0; }
+.chart-panel {
+  width: 370px; flex-shrink: 0;
+  position: sticky; top: 1.5rem;
+  display: none;
+}
+.chart-panel.visible { display: block; }
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1.25rem 1.5rem 1rem;
+}
+.chart-title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+}
+.chart-canvas-wrap { position: relative; height: 320px; }
+.chart-legend {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.legend-swatch {
+  width: 22px; height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  position: relative;
+  top: -2px;
+}
+.legend-final {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--text);
+  margin-left: auto;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2.25rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+header h1 {
+  font-size: 1.75rem;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+header p { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; letter-spacing: 0.03em; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+}
+.section-title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.5rem; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem 1.5rem; }
+.grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem 1.25rem; }
+.mt1 { margin-top: 1rem; }
+.mt125 { margin-top: 1.25rem; }
+
+.fg { display: flex; flex-direction: column; gap: 0.35rem; }
+.fg label { font-size: 0.74rem; color: var(--muted); letter-spacing: 0.03em; }
+
+input[type=number], select {
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  background: #fafaf7;
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  border-radius: 2px;
+  color: var(--text);
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  transition: border-color 0.12s;
+}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+input[type=number]:focus, select:focus { border-color: var(--accent); background: #fff; }
+input[readonly] { background: #f0efe8; color: var(--muted); cursor: default; }
+
+.radio-row { display: flex; gap: 1.2rem; align-items: center; margin-top: 0.35rem; }
+.radio-row label { font-size: 0.82rem; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 0.3rem; }
+.radio-row input[type=radio] { accent-color: var(--accent); width: 14px; height: 14px; }
+
+.derived-hint {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+  min-height: 1em;
+}
+
+/* Summary table */
+.calc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  margin-top: 1.25rem;
+  table-layout: fixed;
+}
+.calc-table th {
+  padding: 0.5rem 0.75rem;
+  background: #f5f3ec;
+  border: 1px solid var(--border);
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: normal;
+  text-align: left;
+}
+.calc-table td {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+.calc-table td.mono { font-family: var(--mono); }
+.calc-table td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.calc-table td.process { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); line-height: 1.7; }
+.calc-table tr:nth-child(even) td { background: #fafaf7; }
+.calc-table tr.subtotal td { background: var(--accent-bg); }
+.calc-table tr.total td {
+  background: var(--accent-bg);
+  border-top: 1.5px solid var(--accent);
+  font-weight: bold;
+}
+.calc-table tr.total td.process { font-weight: normal; }
+.calc-table colgroup { }
+
+/* Buttons */
+.btn {
+  padding: 0.55rem 1.2rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  font-family: 'Georgia', serif;
+  transition: all 0.12s;
+}
+.btn:hover { background: var(--accent-bg); border-color: var(--accent-border); }
+.btn-add {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  padding: 0.6rem 2rem;
+  font-size: 0.82rem;
+}
+.btn-add:hover { background: #9e6016; border-color: #9e6016; }
+.btn-del { color: #b03030; border-color: #e0c0c0; font-size: 0.78rem; padding: 0.4rem 0.9rem; }
+.btn-del:hover { background: #fdf0f0; border-color: #b03030; }
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+.plan-tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+}
+
+.add-row { text-align: center; margin: 1rem 0 2rem; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+
+/* Highlighted key result box */
+.key-results {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 1.25rem;
+}
+.key-result {
+  background: var(--accent-bg);
+  padding: 1rem 1.25rem;
+}
+.key-result-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+.key-result-value {
+  font-family: var(--mono);
+  font-size: 1.55rem;
+  color: var(--accent);
+  line-height: 1.2;
+}
+.key-result-sub { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.85rem;
+}
+.btn-clear {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid #dedad2;
+  background: transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-family: 'Georgia', serif;
+  transition: all 0.12s;
+}
+.btn-clear:hover { border-color: #b03030; color: #b03030; background: #fdf5f5; }
+.save-indicator {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.3s;
+  letter-spacing: 0.03em;
+}
+.save-indicator.flash { opacity: 1; }
+.save-indicator.fade  { opacity: 0; transition: opacity 1.8s; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>购车分期计算器</h1>
+    <p>全本地计算 · 十进制精度 · 等额本息 · 复利年化换算</p>
+    <div class="header-actions">
+      <button class="btn-clear" onclick="ClearState()">清除本地记录</button>
+      <span class="save-indicator" id="saveIndicator">已自动保存</span>
+    </div>
+  </header>
+
+  <!-- ── Vehicle Info (full width above flex layout) ── -->
+  <div class="card">
+    <div class="section-title">车辆购置信息</div>
+
+    <div class="grid-3">
+      <div class="fg">
+        <label>裸车成交价</label>
+        <input type="number" id="barePrice" step="0.01" min="0" placeholder="0.00" oninput="recalcAll()">
+      </div>
+      <div class="fg">
+        <label>购置税补贴折扣率</label>
+        <select id="taxDiscount" onchange="recalcAll()">
+          <option value="1">无补贴（100%）</option>
+          <option value="0.5">享受补贴（50%）</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>交强险（固定）</label>
+        <input type="number" value="950.00" readonly>
+      </div>
+    </div>
+
+    <div class="grid-3 mt1">
+      <div class="fg">
+        <label>商业险金额</label>
+        <input type="number" id="commercialIns" step="0.01" min="0" placeholder="0.00" oninput="recalcAll()">
+      </div>
+      <div class="fg">
+        <label>商业险补贴（直接扣减）</label>
+        <input type="number" id="commercialSub" step="0.01" min="0" placeholder="0.00" oninput="recalcAll()">
+      </div>
+      <div class="fg">
+        <label>服务费</label>
+        <input type="number" id="serviceFee" step="0.01" min="0" placeholder="0.00" oninput="recalcAll()">
+      </div>
+    </div>
+
+    <div id="vehicleBreakdown"></div>
+  </div>
+
+  <!-- ── Main flex layout: plans left, chart right ── -->
+  <div class="main-layout">
+    <div class="plans-col">
+      <!-- ── Plans ── -->
+      <div id="plansContainer"></div>
+      <div class="add-row">
+        <button class="btn btn-add" onclick="addPlan()">+ 添加分期方案</button>
+      </div>
+    </div>
+
+    <!-- ── Chart Panel ── -->
+    <div class="chart-panel" id="chartPanel">
+      <div class="chart-card">
+        <div class="chart-title">各方案累计支付额（首月起）</div>
+        <div class="chart-canvas-wrap">
+          <canvas id="cumulChart"></canvas>
+        </div>
+        <div class="chart-legend" id="chartLegend"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── Precision helpers ── */
+const Fmt = (n, d = 2) => (!isFinite(n) || isNaN(n)) ? '—' : n.toFixed(d);
+const FmtPct = r => Fmt(r * 100, 4) + '%';
+const FmtPctShort = r => Fmt(r * 100, 2) + '%';
+const Gv = id => parseFloat(document.getElementById(id)?.value) || 0;
+
+/* ── Vehicle calculation ── */
+function CalcVehicle()
+{
+    const bare   = Gv('barePrice');
+    const taxMul = parseFloat(document.getElementById('taxDiscount').value);
+    const tax    = bare / 1.13 * 0.10 * taxMul;
+    const cpls   = 950.00;
+    const comm   = Gv('commercialIns');
+    const cSub   = Math.min(Gv('commercialSub'), comm);
+    const netC   = comm - cSub;
+    const svc    = Gv('serviceFee');
+    const total  = bare + tax + cpls + netC + svc;
+    return { bare, taxMul, tax, cpls, comm, cSub, netC, svc, total };
+}
+
+function RenderVehicleBreakdown(v)
+{
+    const el = document.getElementById('vehicleBreakdown');
+    if (v.bare <= 0) { el.innerHTML = ''; return; }
+
+    const taxDiscount = v.taxMul === 0.5 ? '× 50%（补贴折扣）' : '× 100%（无补贴）';
+    el.innerHTML = `
+    <table class="calc-table" style="margin-top:1.25rem">
+      <colgroup><col style="width:14%"><col style="width:62%"><col style="width:24%"></colgroup>
+      <thead><tr><th>费用项目</th><th>计算过程</th><th style="text-align:right">金额</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>裸车成交价</td>
+          <td class="process">直接输入</td>
+          <td class="num">${Fmt(v.bare)}</td>
+        </tr>
+        <tr>
+          <td>车辆购置税</td>
+          <td class="process">
+            公式：裸车价 ÷ 1.13 × 10% × 折扣率<br>
+            = ${Fmt(v.bare)} ÷ 1.13 × 10% ${taxDiscount}<br>
+            = ${Fmt(v.bare / 1.13)} × 10% ${taxDiscount}<br>
+            = ${Fmt(v.bare / 1.13 * 0.10)} ${taxDiscount}
+          </td>
+          <td class="num">${Fmt(v.tax)}</td>
+        </tr>
+        <tr>
+          <td>交强险</td>
+          <td class="process">固定费用</td>
+          <td class="num">${Fmt(v.cpls)}</td>
+        </tr>
+        <tr>
+          <td>商业险</td>
+          <td class="process">
+            商业险金额 ${Fmt(v.comm)} − 补贴 ${Fmt(v.cSub)}<br>
+            = ${Fmt(v.netC)}
+          </td>
+          <td class="num">${Fmt(v.netC)}</td>
+        </tr>
+        <tr>
+          <td>服务费</td>
+          <td class="process">直接输入</td>
+          <td class="num">${Fmt(v.svc)}</td>
+        </tr>
+        <tr class="total">
+          <td>车辆总价</td>
+          <td class="process">
+            ${Fmt(v.bare)} + ${Fmt(v.tax)} + ${Fmt(v.cpls)} + ${Fmt(v.netC)} + ${Fmt(v.svc)}
+          </td>
+          <td class="num">${Fmt(v.total)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+/* ── Plan management ── */
+let _planSeq  = 0;
+let _planMeta = {};   // id → { downMode, rateMode }
+
+function AddPlan()
+{
+    const id = ++_planSeq;
+    _planMeta[id] = { downMode: 'ratio', rateMode: 'annual' };
+
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.id = `plan-${id}`;
+    div.innerHTML = BuildPlanHTML(id);
+    document.getElementById('plansContainer').appendChild(div);
+}
+
+function BuildPlanHTML(id)
+{
+    return `
+    <div class="plan-header">
+      <span class="plan-tag">分期方案 ${id}</span>
+      <button class="btn btn-del" onclick="RemovePlan(${id})">删除方案</button>
+    </div>
+
+    <div class="grid-4">
+      <div class="fg" style="grid-column:span 1">
+        <label>首付方式</label>
+        <div class="radio-row">
+          <label><input type="radio" name="dm_${id}" value="ratio" checked onchange="SwitchDown(${id},'ratio')">比例</label>
+          <label><input type="radio" name="dm_${id}" value="amount" onchange="SwitchDown(${id},'amount')">金额</label>
+        </div>
+      </div>
+      <div class="fg" id="ratioGrp_${id}">
+        <label>首付比例 (%)</label>
+        <input type="number" id="downRatio_${id}" step="0.01" min="0" max="100" placeholder="30.00" oninput="OnPlan(${id})">
+        <div class="derived-hint" id="hintDown_${id}"></div>
+      </div>
+      <div class="fg" id="amtGrp_${id}" style="display:none">
+        <label>首付金额</label>
+        <input type="number" id="downAmt_${id}" step="0.01" min="0" placeholder="0.00" oninput="OnPlan(${id})">
+        <div class="derived-hint" id="hintDown_${id}_b"></div>
+      </div>
+      <div class="fg">
+        <label>分期期数（月）</label>
+        <input type="number" id="months_${id}" step="1" min="1" placeholder="36" oninput="OnPlan(${id})">
+      </div>
+    </div>
+
+    <div class="grid-4 mt1">
+      <div class="fg">
+        <label>利率输入方式</label>
+        <div class="radio-row">
+          <label><input type="radio" name="rm_${id}" value="annual" checked onchange="SwitchRate(${id},'annual')">年化</label>
+          <label><input type="radio" name="rm_${id}" value="monthly" onchange="SwitchRate(${id},'monthly')">月利率</label>
+        </div>
+      </div>
+      <div class="fg">
+        <label id="rateLabel_${id}">年化利率 (%)</label>
+        <input type="number" id="rateInput_${id}" step="0.0001" min="0" placeholder="0.0000" oninput="OnPlan(${id})">
+        <div class="derived-hint" id="hintRate_${id}"></div>
+      </div>
+      <div class="fg">
+        <label>利息补贴额</label>
+        <input type="number" id="subsidy_${id}" step="0.01" min="0" placeholder="0.00" oninput="OnPlan(${id})">
+      </div>
+    </div>
+
+    <div id="planResults_${id}"></div>`;
+}
+
+function RemovePlan(id)
+{
+    delete _planMeta[id];
+    document.getElementById(`plan-${id}`)?.remove();
+}
+
+function SwitchDown(id, mode)
+{
+    _planMeta[id].downMode = mode;
+    const showRatio  = mode === 'ratio';
+    document.getElementById(`ratioGrp_${id}`).style.display = showRatio ? '' : 'none';
+    document.getElementById(`amtGrp_${id}`).style.display   = showRatio ? 'none' : '';
+    OnPlan(id);
+}
+
+function SwitchRate(id, mode)
+{
+    _planMeta[id].rateMode = mode;
+    document.getElementById(`rateLabel_${id}`).textContent =
+        mode === 'annual' ? '年化利率 (%)' : '月利率 (%)';
+    OnPlan(id);
+}
+
+/* ── Plan calculation ── */
+function CalcPlan(id, bare)
+{
+    const meta = _planMeta[id];
+
+    // Down payment
+    let downPayment, downRatio;
+    if (meta.downMode === 'ratio') {
+        downRatio   = (parseFloat(document.getElementById(`downRatio_${id}`)?.value) || 0) / 100;
+        downPayment = bare * downRatio;
+    } else {
+        downPayment = parseFloat(document.getElementById(`downAmt_${id}`)?.value) || 0;
+        downRatio   = bare > 0 ? downPayment / bare : 0;
+    }
+
+    const loan = bare - downPayment;
+    const n    = parseInt(document.getElementById(`months_${id}`)?.value) || 0;
+
+    // Rates
+    const rateInput = parseFloat(document.getElementById(`rateInput_${id}`)?.value) || 0;
+    let monthlyRate, annualRate;
+    if (meta.rateMode === 'annual') {
+        annualRate  = rateInput / 100;
+        monthlyRate = Math.pow(1 + annualRate, 1 / 12) - 1;
+    } else {
+        monthlyRate = rateInput / 100;
+        annualRate  = Math.pow(1 + monthlyRate, 12) - 1;
+    }
+
+    const subsidy = parseFloat(document.getElementById(`subsidy_${id}`)?.value) || 0;
+
+    // Equal principal+interest (等额本息)
+    let monthlyFull, totalInterest;
+    if (n === 0 || loan <= 0) {
+        monthlyFull   = 0;
+        totalInterest = 0;
+    } else if (monthlyRate < 1e-10) {
+        monthlyFull   = loan / n;
+        totalInterest = 0;
+    } else {
+        const factor  = Math.pow(1 + monthlyRate, n);
+        monthlyFull   = loan * monthlyRate * factor / (factor - 1);
+        totalInterest = monthlyFull * n - loan;
+    }
+
+    // Interest subsidy — evenly distributed across months
+    const effSubsidy          = Math.min(subsidy, totalInterest);
+    const netInterest         = totalInterest - effSubsidy;
+    const monthlySubRelief    = n > 0 ? effSubsidy / n : 0;
+    const monthlyActual       = monthlyFull - monthlySubRelief;
+
+    return {
+        downPayment, downRatio, loan, n,
+        rateInput, monthlyRate, annualRate,
+        monthlyFull, totalInterest,
+        subsidy, effSubsidy, netInterest,
+        monthlySubRelief, monthlyActual,
+        meta
+    };
+}
+
+/* ── Render plan results ── */
+function RenderPlanResults(id, c, veh)
+{
+    const el = document.getElementById(`planResults_${id}`);
+    if (!el) return;
+
+    // Update derived hints
+    const meta = _planMeta[id];
+
+    if (meta.downMode === 'ratio') {
+        const h = document.getElementById(`hintDown_${id}`);
+        if (h) h.textContent = veh.bare > 0 && c.downRatio > 0
+            ? `首付金额 = ${Fmt(c.downPayment)}`
+            : '';
+    } else {
+        const h = document.getElementById(`hintDown_${id}_b`);
+        if (h) h.textContent = veh.bare > 0 && c.downPayment > 0
+            ? `首付比例 = ${FmtPct(c.downRatio)}`
+            : '';
+    }
+
+    const hr = document.getElementById(`hintRate_${id}`);
+    if (hr) {
+        if (meta.rateMode === 'annual' && c.annualRate > 0) {
+            hr.textContent = `月利率 = (1 + ${FmtPct(c.annualRate)})^(1/12) − 1 = ${FmtPct(c.monthlyRate)}`;
+        } else if (meta.rateMode === 'monthly' && c.monthlyRate > 0) {
+            hr.textContent = `年化利率 = (1 + ${FmtPct(c.monthlyRate)})^12 − 1 = ${FmtPct(c.annualRate)}`;
+        } else {
+            hr.textContent = '';
+        }
+    }
+
+    if (veh.bare <= 0 || c.n <= 0 || c.loan <= 0) { el.innerHTML = ''; return; }
+
+    // Monthly payment formula detail
+    const factor = c.monthlyRate > 1e-10 ? Math.pow(1 + c.monthlyRate, c.n) : 0;
+
+    let monthlyProcess;
+    if (c.monthlyRate < 1e-10) {
+        monthlyProcess = `利率为零，等额本金还款<br>月供 = ${Fmt(c.loan)} ÷ ${c.n} = <b>${Fmt(c.monthlyFull)}</b>`;
+    } else {
+        monthlyProcess = `公式：P × r × (1+r)^n ÷ [(1+r)^n − 1]<br>
+P = ${Fmt(c.loan)}，r = ${FmtPct(c.monthlyRate)}，n = ${c.n}<br>
+(1+r)^n = (1 + ${FmtPct(c.monthlyRate)})^${c.n} = ${Fmt(factor, 8)}<br>
+= ${Fmt(c.loan)} × ${FmtPct(c.monthlyRate)} × ${Fmt(factor, 8)} ÷ (${Fmt(factor, 8)} − 1)<br>
+= ${Fmt(c.loan)} × ${FmtPct(c.monthlyRate)} × ${Fmt(factor, 8)} ÷ ${Fmt(factor - 1, 8)}<br>
+= <b>${Fmt(c.monthlyFull)}</b>`;
+    }
+
+    const totalIntProcess = `${Fmt(c.monthlyFull)} × ${c.n} − ${Fmt(c.loan)}<br>= ${Fmt(c.monthlyFull * c.n)} − ${Fmt(c.loan)}<br>= <b>${Fmt(c.totalInterest)}</b>`;
+
+    let subsidyRow = '';
+    if (c.subsidy > 0) {
+        subsidyRow = `
+        <tr>
+          <td>实际补贴额</td>
+          <td class="process">
+            取 min(补贴输入, 总利息) = min(${Fmt(c.subsidy)}, ${Fmt(c.totalInterest)})<br>
+            实际补贴 = <b>${Fmt(c.effSubsidy)}</b>
+          </td>
+          <td class="num">${Fmt(c.effSubsidy)}</td>
+        </tr>
+        <tr>
+          <td>每月补贴减免</td>
+          <td class="process">
+            实际补贴 ÷ 期数 = ${Fmt(c.effSubsidy)} ÷ ${c.n}<br>
+            = <b>${Fmt(c.monthlySubRelief)}</b>（均摊至每月）
+          </td>
+          <td class="num">${Fmt(c.monthlySubRelief)}</td>
+        </tr>
+        <tr>
+          <td>实际支付利息</td>
+          <td class="process">
+            总利息 − 实际补贴 = ${Fmt(c.totalInterest)} − ${Fmt(c.effSubsidy)}<br>
+            = <b>${Fmt(c.netInterest)}</b>
+          </td>
+          <td class="num">${Fmt(c.netInterest)}</td>
+        </tr>`;
+    }
+
+    const actualMonthlyProcess = c.subsidy > 0
+        ? `全额月供 − 每月补贴 = ${Fmt(c.monthlyFull)} − ${Fmt(c.monthlySubRelief)}<br>= <b>${Fmt(c.monthlyActual)}</b>`
+        : `等额本息标准月供，无补贴减免<br><b>${Fmt(c.monthlyActual)}</b>`;
+
+    const firstPay = c.downPayment + c.monthlyActual + veh.tax + veh.cpls + veh.netC + veh.svc;
+    const firstPayProcess = `首付 ${Fmt(c.downPayment)} + 首月月供 ${Fmt(c.monthlyActual)}<br>
++ 购置税 ${Fmt(veh.tax)} + 交强险 ${Fmt(veh.cpls)}<br>
++ 商业险（净）${Fmt(veh.netC)} + 服务费 ${Fmt(veh.svc)}<br>
+= <b>${Fmt(firstPay)}</b>`;
+
+    const downModeText = meta.downMode === 'ratio'
+        ? `裸车价 × 首付比例 = ${Fmt(veh.bare)} × ${FmtPct(c.downRatio)}`
+        : '直接输入';
+
+    el.innerHTML = `
+    <hr class="divider">
+    <div class="key-results">
+      <div class="key-result">
+        <div class="key-result-label">实际月供</div>
+        <div class="key-result-value">${Fmt(c.monthlyActual)}</div>
+        <div class="key-result-sub">共 ${c.n} 期，每月等额还款</div>
+      </div>
+      <div class="key-result">
+        <div class="key-result-label">首期付款额</div>
+        <div class="key-result-value">${Fmt(firstPay)}</div>
+        <div class="key-result-sub">含首付、首月月供及全部税费</div>
+      </div>
+      <div class="key-result">
+        <div class="key-result-label">实际支付利息</div>
+        <div class="key-result-value">${Fmt(c.netInterest)}</div>
+        <div class="key-result-sub">总利息 ${Fmt(c.totalInterest)}，补贴 ${Fmt(c.effSubsidy)}</div>
+      </div>
+    </div>
+
+    <table class="calc-table">
+      <colgroup><col style="width:14%"><col style="width:62%"><col style="width:24%"></colgroup>
+      <thead><tr><th>计算项目</th><th>计算过程</th><th style="text-align:right">结果</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>首付金额</td>
+          <td class="process">${downModeText}</td>
+          <td class="num">${Fmt(c.downPayment)}</td>
+        </tr>
+        <tr>
+          <td>贷款金额</td>
+          <td class="process">裸车价 − 首付 = ${Fmt(veh.bare)} − ${Fmt(c.downPayment)}</td>
+          <td class="num">${Fmt(c.loan)}</td>
+        </tr>
+        <tr>
+          <td>月利率</td>
+          <td class="process">
+            ${meta.rateMode === 'annual'
+                ? `由年化利率换算：(1 + ${FmtPct(c.annualRate)})^(1/12) − 1`
+                : '直接输入月利率'}
+          </td>
+          <td class="num">${FmtPct(c.monthlyRate)}</td>
+        </tr>
+        <tr>
+          <td>年化利率</td>
+          <td class="process">
+            ${meta.rateMode === 'monthly'
+                ? `由月利率换算（复利）：(1 + ${FmtPct(c.monthlyRate)})^12 − 1`
+                : '直接输入年化利率'}
+          </td>
+          <td class="num">${FmtPct(c.annualRate)}</td>
+        </tr>
+        <tr>
+          <td>等额月供<br><span style="font-size:0.7rem;color:var(--muted)">（未扣补贴）</span></td>
+          <td class="process">${monthlyProcess}</td>
+          <td class="num">${Fmt(c.monthlyFull)}</td>
+        </tr>
+        <tr>
+          <td>总利息</td>
+          <td class="process">${totalIntProcess}</td>
+          <td class="num">${Fmt(c.totalInterest)}</td>
+        </tr>
+        ${subsidyRow}
+        <tr class="total">
+          <td>实际月供</td>
+          <td class="process">${actualMonthlyProcess}</td>
+          <td class="num">${Fmt(c.monthlyActual)}</td>
+        </tr>
+        <tr class="total">
+          <td>首期付款额</td>
+          <td class="process">${firstPayProcess}</td>
+          <td class="num">${Fmt(firstPay)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+/* ── Event handlers ── */
+function OnPlan(id)
+{
+    const veh = CalcVehicle();
+    const c   = CalcPlan(id, veh.bare);
+    RenderPlanResults(id, c, veh);
+    StoreChartData(id, c, veh);
+    UpdateChart();
+    SaveState();
+}
+
+function recalcAll()
+{
+    const veh = CalcVehicle();
+    RenderVehicleBreakdown(veh);
+    Object.keys(_planMeta).forEach(id => {
+        const c = CalcPlan(+id, veh.bare);
+        RenderPlanResults(+id, c, veh);
+        StoreChartData(+id, c, veh);
+    });
+    UpdateChart();
+    SaveState();
+}
+
+/* ── Chart ── */
+const CHART_COLORS = ['#b8721a','#2a6da8','#3a7a44','#8b3a8b','#b03030','#1a8a8a','#7a6a1a'];
+let   _chartInst   = null;
+const _chartData   = {};   // id → { label, firstPay, monthlyActual, n, color }
+let   _colorIdx    = {};   // id → color index (stable per plan)
+let   _colorSeq    = 0;
+
+function StoreChartData(id, c, veh)
+{
+    const firstPay = c.downPayment + c.monthlyActual + veh.tax + veh.cpls + veh.netC + veh.svc;
+    const valid    = c.loan > 0 && c.n > 0 && c.monthlyActual > 0;
+
+    if (!valid) {
+        delete _chartData[id];
+        return;
+    }
+    if (_colorIdx[id] === undefined) {
+        _colorIdx[id] = _colorSeq++ % CHART_COLORS.length;
+    }
+    _chartData[id] = {
+        label:        `方案 ${id}`,
+        firstPay,
+        monthlyActual: c.monthlyActual,
+        n:             c.n,
+        color:         CHART_COLORS[_colorIdx[id]],
+    };
+}
+
+function BuildCumulSeries(entry)
+{
+    const pts = [{ x: 0, y: 0 }];
+    for (let m = 1; m <= entry.n; m++) {
+        pts.push({ x: m, y: entry.firstPay + (m - 1) * entry.monthlyActual });
+    }
+    return pts;
+}
+
+function UpdateChart()
+{
+    const entries  = Object.values(_chartData);
+    const panel    = document.getElementById('chartPanel');
+    const legendEl = document.getElementById('chartLegend');
+
+    if (entries.length < 2) {
+        panel.classList.remove('visible');
+        if (_chartInst) { _chartInst.destroy(); _chartInst = null; }
+        return;
+    }
+    panel.classList.add('visible');
+
+    const maxN    = Math.max(...entries.map(e => e.n));
+    const labels  = Array.from({ length: maxN + 1 }, (_, i) => i);
+    const datasets = entries.map(e => ({
+        label:           e.label,
+        data:            BuildCumulSeries(e),
+        borderColor:     e.color,
+        backgroundColor: e.color + '22',
+        borderWidth:     2,
+        pointRadius:     0,
+        pointHoverRadius: 4,
+        tension:         0.1,
+        fill:            false,
+    }));
+
+    const canvas = document.getElementById('cumulChart');
+    if (_chartInst) {
+        _chartInst.data.datasets = datasets;
+        _chartInst.options.scales.x.max = maxN;
+        _chartInst.update('none');
+    } else {
+        _chartInst = new Chart(canvas, {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                animation: { duration: 250 },
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title:  items => `第 ${items[0].parsed.x} 期末`,
+                            label:  item  => ` ${item.dataset.label}：${item.parsed.y.toFixed(2)}`,
+                        },
+                        bodyFont: { family: 'Consolas, monospace', size: 12 },
+                        titleFont: { size: 11 },
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        max: maxN,
+                        title: { display: true, text: '期数（月）', font: { size: 11 }, color: '#9a9990' },
+                        ticks: { font: { size: 11 }, color: '#9a9990', stepSize: Math.ceil(maxN / 8) },
+                        grid: { color: '#e8e5dd' },
+                    },
+                    y: {
+                        title: { display: true, text: '累计支付额', font: { size: 11 }, color: '#9a9990' },
+                        ticks: {
+                            font: { family: 'Consolas, monospace', size: 11 },
+                            color: '#9a9990',
+                            callback: v => v >= 10000 ? (v / 10000).toFixed(1) + '万' : v.toFixed(0),
+                        },
+                        grid: { color: '#e8e5dd' },
+                    },
+                },
+            },
+        });
+    }
+
+    // Legend with final totals
+    legendEl.innerHTML = entries.map(e => {
+        const finalTotal = e.firstPay + (e.n - 1) * e.monthlyActual;
+        return `<div class="chart-legend-item">
+          <div class="legend-swatch" style="background:${e.color}"></div>
+          <span>${e.label}（${e.n}期）</span>
+          <span class="legend-final">合计 ${finalTotal.toFixed(2)}</span>
+        </div>`;
+    }).join('');
+}
+
+// Expose globals
+window.addPlan    = AddPlan;
+window.SwitchDown = SwitchDown;
+window.SwitchRate = SwitchRate;
+window.OnPlan     = OnPlan;
+window.recalcAll  = recalcAll;
+
+// Patch RemovePlan to also clean chart data and save
+const _origRemove = RemovePlan;
+window.RemovePlan = function(id) {
+    _origRemove(id);
+    delete _chartData[id];
+    UpdateChart();
+    SaveState();
+};
+
+/* ── localStorage persistence ── */
+const LS_KEY = 'carLoanCalc_v1';
+let   _saveTimer = null;
+
+function SaveState()
+{
+    const veh = {
+        barePrice:      document.getElementById('barePrice').value,
+        taxDiscount:    document.getElementById('taxDiscount').value,
+        commercialIns:  document.getElementById('commercialIns').value,
+        commercialSub:  document.getElementById('commercialSub').value,
+        serviceFee:     document.getElementById('serviceFee').value,
+    };
+
+    const plans = Object.keys(_planMeta).map(id => {
+        const n = +id;
+        return {
+            id,
+            downMode:  _planMeta[n].downMode,
+            rateMode:  _planMeta[n].rateMode,
+            downRatio: document.getElementById(`downRatio_${n}`)?.value ?? '',
+            downAmt:   document.getElementById(`downAmt_${n}`)?.value   ?? '',
+            months:    document.getElementById(`months_${n}`)?.value     ?? '',
+            rateInput: document.getElementById(`rateInput_${n}`)?.value  ?? '',
+            subsidy:   document.getElementById(`subsidy_${n}`)?.value    ?? '',
+        };
+    });
+
+    try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ vehicle: veh, planSeq: _planSeq, plans }));
+    } catch (e) { /* quota exceeded — silently ignore */ }
+
+    // Flash indicator
+    const ind = document.getElementById('saveIndicator');
+    ind.classList.remove('fade');
+    ind.classList.add('flash');
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+        ind.classList.remove('flash');
+        ind.classList.add('fade');
+        setTimeout(() => ind.classList.remove('fade'), 2000);
+    }, 800);
+}
+
+function LoadState()
+{
+    let state;
+    try { state = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) { state = null; }
+
+    if (!state) { AddPlan(); return; }
+
+    // Restore vehicle fields
+    const v = state.vehicle || {};
+    const SetVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+    SetVal('barePrice',     v.barePrice);
+    SetVal('taxDiscount',   v.taxDiscount);
+    SetVal('commercialIns', v.commercialIns);
+    SetVal('commercialSub', v.commercialSub);
+    SetVal('serviceFee',    v.serviceFee);
+
+    // Restore plans — use saved IDs directly so DOM ids stay stable
+    _planSeq = +(state.planSeq) || 0;
+    const savedPlans = Array.isArray(state.plans) ? state.plans : [];
+
+    if (savedPlans.length === 0) { AddPlan(); }
+    else {
+        savedPlans.forEach(p => {
+            const id = +p.id;
+            // Manually replicate AddPlan with a forced ID
+            if (id > _planSeq) _planSeq = id;
+            _planMeta[id] = { downMode: p.downMode || 'ratio', rateMode: p.rateMode || 'annual' };
+
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.id = `plan-${id}`;
+            div.innerHTML = BuildPlanHTML(id);
+            document.getElementById('plansContainer').appendChild(div);
+
+            // Restore toggle UI state before setting values
+            if (p.downMode === 'amount') {
+                document.querySelector(`input[name="dm_${id}"][value="amount"]`).checked = true;
+                document.getElementById(`ratioGrp_${id}`).style.display = 'none';
+                document.getElementById(`amtGrp_${id}`).style.display   = '';
+            }
+            if (p.rateMode === 'monthly') {
+                document.querySelector(`input[name="rm_${id}"][value="monthly"]`).checked = true;
+                document.getElementById(`rateLabel_${id}`).textContent = '月利率 (%)';
+            }
+
+            // Set input values
+            SetVal(`downRatio_${id}`, p.downRatio);
+            SetVal(`downAmt_${id}`,   p.downAmt);
+            SetVal(`months_${id}`,    p.months);
+            SetVal(`rateInput_${id}`, p.rateInput);
+            SetVal(`subsidy_${id}`,   p.subsidy);
+        });
+    }
+
+    recalcAll();
+}
+
+function ClearState()
+{
+    if (!confirm('清除所有本地保存的数据？')) return;
+
+    localStorage.removeItem(LS_KEY);
+
+    // Reset vehicle inputs
+    ['barePrice','commercialIns','commercialSub','serviceFee'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('taxDiscount').value = '1';
+    document.getElementById('vehicleBreakdown').innerHTML = '';
+
+    // Remove all plans
+    Object.keys(_planMeta).forEach(id => {
+        document.getElementById(`plan-${id}`)?.remove();
+        delete _planMeta[+id];
+        delete _chartData[+id];
+    });
+    _planSeq  = 0;
+    _colorSeq = 0;
+    _colorIdx = {};
+    if (_chartInst) { _chartInst.destroy(); _chartInst = null; }
+    document.getElementById('chartPanel').classList.remove('visible');
+
+    AddPlan();
+}
+
+window.ClearState = ClearState;
+
+// Init: restore from localStorage or start fresh
+LoadState();
+</script>
+</body>
+</html>
